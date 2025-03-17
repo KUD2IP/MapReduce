@@ -11,6 +11,8 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Класс Coordinator управляет задачами в рамках MapReduce-программы.
@@ -39,7 +41,10 @@ public class Coordinator {
     private final Set<Integer> completedReduceTasks;
 
     // Счетчик для генерации уникальных идентификаторов map-тасков.
-    private int nextMapTaskId = 0;
+    private final AtomicInteger nextMapTaskId = new AtomicInteger(0);
+
+    // Общее количество map-задач.
+    private final int totalMapTasks;
 
     /**
      * @param files Массив имен файлов, которые необходимо обработать.
@@ -60,8 +65,10 @@ public class Coordinator {
 
         // Создание map-задач для каждого файла.
         for (String file : files) {
-            mapTasks.add(new MapTask(nextMapTaskId++, file, numReduceTasks));
+            mapTasks.add(new MapTask(nextMapTaskId.getAndIncrement(), file, numReduceTasks));
         }
+
+        this.totalMapTasks = mapTasks.size();
     }
 
     /**
@@ -81,7 +88,7 @@ public class Coordinator {
                     totalWords += line.split("\\s+").length;
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new RuntimeException("Ошибка при чтении файла: " + file, e);
             }
         }
         return totalWords;
@@ -118,14 +125,14 @@ public class Coordinator {
         for (Map.Entry<Integer, String> entry : intermediateFileNames.entrySet()) {
             int reduceTaskId = entry.getKey();
             String fileName = entry.getValue();
-            intermediateFiles.computeIfAbsent(reduceTaskId, k -> new ArrayList<>()).add(fileName);
+            intermediateFiles.computeIfAbsent(reduceTaskId, k -> new CopyOnWriteArrayList<>()).add(fileName);
         }
 
         // Отмечаем задачу как завершенную.
         completedMapTasks.add(task.getId());
 
         // Если все map-задачи завершены, создаем reduce-задачи.
-        if (completedMapTasks.size() == mapTasks.size() + completedMapTasks.size()) {
+        if (completedMapTasks.size() == totalMapTasks) {
             for (int i = 0; i < numReduceTasks; i++) {
                 reduceTasks.add(new ReduceTask(i, intermediateFiles.getOrDefault(i, Collections.emptyList())));
             }

@@ -81,7 +81,7 @@ public class Worker implements Runnable {
                     writer.write(line + "\n");
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new RuntimeException("Ошибка при чтении файла: " + fileName, e);
             }
         }
         // Сообщаем Coordinator о завершении map-задачи.
@@ -117,11 +117,13 @@ public class Worker implements Runnable {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     // Разделяем строку на ключ и значение.
-                    String[] parts = line.split(" ");
-                    keyValues.add(new KeyValue(parts[0], parts[1]));
+                    String[] parts = line.trim().split("\\s+");
+                    if (parts.length >= 2) {
+                        keyValues.add(new KeyValue(parts[0], parts[1]));
+                    }
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new RuntimeException("Ошибка при чтении файла: " + file, e);
             }
         }
 
@@ -151,7 +153,7 @@ public class Worker implements Runnable {
                 writer.write(currentKey + " " + result + "\n");
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Ошибка при чтении файла ", e);
         }
         // Сообщаем Coordinator о завершении reduce-задачи.
         coordinator.completeReduceTask(task);
@@ -171,7 +173,7 @@ public class Worker implements Runnable {
                 content.append(line).append("\n");
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new RuntimeException("Ошибка при чтении файла: " + fileName, e);
         }
         return content.toString();
     }
@@ -186,7 +188,9 @@ public class Worker implements Runnable {
         List<KeyValue> keyValues = new ArrayList<>();
         String[] words = content.split("\\s+");
         for (String word : words) {
-            keyValues.add(new KeyValue(word, "1"));
+            if (!word.isEmpty()) {
+                keyValues.add(new KeyValue(word, "1"));
+            }
         }
         return keyValues;
     }
